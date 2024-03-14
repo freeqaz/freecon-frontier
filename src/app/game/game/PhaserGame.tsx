@@ -1,7 +1,7 @@
 import 'phaser';
 import {forwardRef, MutableRefObject, useEffect, useLayoutEffect, useRef} from 'react';
-import StartGame from './main.js';
-import { EventBus } from './EventBus.js';
+import StartGame from './main';
+import { EventBus } from './EventBus';
 
 interface PhaserGameProps {
     currentActiveScene: (scene: Phaser.Scene) => void;

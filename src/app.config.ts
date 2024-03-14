@@ -1,7 +1,6 @@
-import config from "@colyseus/tools";
+import {ConfigOptions, default as colyseusTools} from "@colyseus/tools";
 import { monitor } from "@colyseus/monitor";
 import { playground } from "@colyseus/playground";
-import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { parse } from 'url';
 import next from 'next';
 
@@ -17,9 +16,9 @@ const port: number = 2567;
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-export const colyseusApp = config({
+// I have no idea why this madness happens at the type level but this tames the beast.
+export default ((colyseusTools.default as unknown) as (options: ConfigOptions) => ConfigOptions)({
 
-// @ts-ignore
     initializeGameServer: (gameServer) => {
         /**
          * Define your room handlers:
@@ -28,16 +27,13 @@ export const colyseusApp = config({
 
     },
 
-// @ts-ignore
     initializeExpress: async (expressApp) => {
-        console.log('starting next server');
         await app.prepare();
 
         /**
          * Bind your custom express routes here:
          * Read more: https://expressjs.com/en/starter/basic-routing.html
          */
-// @ts-ignore
         expressApp.get("/hello_world", (req, res) => {
             res.send("It's time to kick ass and chew bubblegum!");
         });
@@ -57,7 +53,6 @@ export const colyseusApp = config({
          */
         expressApp.use("/colyseus", monitor());
 
-// @ts-ignore
         expressApp.use(async (req, res) => {
             try {
                 const parsedUrl = parse(req.url || '', true);

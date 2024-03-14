@@ -2,8 +2,8 @@
 
 import {MutableRefObject, useRef, useState} from 'react';
 import 'phaser';
-import {PhaserGame, PhaserGameRefType} from './game/PhaserGame.js';
-import {MainMenu} from "./game/scenes/MainMenu.js";
+import {PhaserGame, PhaserGameRefType} from './game/PhaserGame';
+import {MainMenu} from "@/app/game/game/scenes/MainMenu";
 
 interface SpritePosition {
   x: number;
