@@ -2,20 +2,67 @@ import 'phaser';
 import { EventBus } from '../EventBus';
 import ParticleEmitter = Phaser.GameObjects.Particles.ParticleEmitter;
 import {Simulate} from "react-dom/test-utils";
+import { Room, Client } from "colyseus.js";
 import play = Simulate.play;
+import { Player } from '@/colyseus/rooms/schema/MyRoomState';
 
+
+interface Player { 
+        x: number;
+        y: number;
+        onChange: (cb: () => void) => void;
+    }
 export class Game extends Phaser.Scene {
     private playerShip!: Phaser.Physics.Arcade.Sprite;
     private cursors!: { [key: string]: Phaser.Input.Keyboard.Key };
     private emitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+    playerEntities: { [sessionId: string]: Phaser.Types.Physics.Arcade.ImageWithDynamicBody } = {};
+    private room!: Room<{
+        players: { 
+                    [sessionId: string]: Player;
+                 } & {
+                    onAdd: (cb: (player: Player, sessionId: string) => void) => void;
+                    onRemove: (cb: (player: Player, sessionId: string) => void) => void;
+                 }
+    }>;
 
+    inputPayload = {
+        left: false,
+        right: false,
+        up: false,
+        down: false,
+    };
 
     constructor() {
         super('Game');
     }
 
-    create() {
+    async connect() {
+        // add connection status text
+        const connectionStatusText = this.add
+            .text(0, 0, "Trying to connect with the server...")
+            .setStyle({ color: "#ff0000" })
+            .setPadding(4)
+
+        const client = new Client("http://localhost:2567");
+
+        try {
+            this.room = await client.joinOrCreate("my_room", {});
+
+            // connection successful!
+            connectionStatusText.destroy();
+
+        } catch (e) {
+            // couldn't connect
+            connectionStatusText.text =  "Could not connect with the server.";
+        }
+
+    }
+
+    async create() {
         this.cameras.main.setBackgroundColor(0x000000);
+
+        await this.connect();
 
         // Player's ship
         this.playerShip = this.physics.add.sprite(400, 300, 'ship1');
@@ -53,10 +100,60 @@ export class Game extends Phaser.Scene {
             shoot: Phaser.Input.Keyboard.KeyCodes.SPACE
         });
 
+        // Colyseus code
+        this.room.state.players.onAdd((player, sessionId) => {
+            const entity = this.physics.add.sprite(player.x, player.y, 'ship1');
+            console.log(player, sessionId);
+            this.playerEntities[sessionId] = entity;
+            
+            // listening for server updates
+            player.onChange(() => {
+                //
+                // do not update local position immediately
+                // we're going to LERP them during the render loop.
+                //
+                entity.setData('serverX', player.x);
+                entity.setData('serverY', player.y);
+            });
+        });
+
+        // remove local reference when entity is removed from the server
+        this.room.state.players.onRemove((player, sessionId) => {
+            const entity = this.playerEntities[sessionId];
+            if (entity) {
+                entity.destroy();
+                delete this.playerEntities[sessionId]
+            }
+        });
+
         EventBus.emit('current-scene-ready', this);
     }
 
     update() {
+
+        //Colyseus code
+        // skip loop if not connected yet.
+        if (!this.room) { return; }
+
+        // send input to the server
+        // this.inputPayload.left = this.cursors.left.isDown;
+        // this.inputPayload.right = this.cursors.right.isDown;
+        // this.inputPayload.up = this.cursors.up.isDown;
+        // this.inputPayload.down = this.cursors.down.isDown;
+
+        // this.room.send(0, this.inputPayload);
+
+        this.room.send(0, { x: this.playerShip.x, y: this.playerShip.y });
+
+        for (let sessionId in this.playerEntities) {
+            // interpolate all player entities
+            const entity = this.playerEntities[sessionId];
+            const { serverX, serverY } = entity.data.values;
+
+            entity.x = Phaser.Math.Linear(entity.x, serverX, 0.2);
+            entity.y = Phaser.Math.Linear(entity.y, serverY, 0.2);
+        }
+
         // Movement
         if (this.cursors.left.isDown) {
             this.playerShip.setAngularVelocity(-150);
@@ -67,6 +164,7 @@ export class Game extends Phaser.Scene {
         }
 
         if (this.cursors.up.isDown) {
+            // @ts-ignore
             this.physics.velocityFromRotation(this.playerShip.rotation, 200, this.playerShip.body?.acceleration);
 
             const particle = this.emitter.emitParticleAt(this.playerShip.x, this.playerShip.y, 1);

@@ -2,10 +2,9 @@
   "name": "freecon-frontier-frontend",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev",
-    "dual-dev": "tsimp src/server.ts",
+    "start-colyseus": "tsx src/server.ts",
     "single-dev": "tsimp src/next-server.ts",
     "build": "next build",
     "start": "next start",
@@ -35,6 +34,7 @@
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "tsimp": "^2.0.11",
+    "tsx": "^4.7.1",
     "typescript": "^5"
   }
 }
