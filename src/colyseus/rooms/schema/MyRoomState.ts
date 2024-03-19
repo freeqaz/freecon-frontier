@@ -21,6 +21,7 @@ export class Player extends Schema {
 export class MyRoomState extends Schema {
   @type("number") mapWidth!: number;
   @type("number") mapHeight!: number;
+  @type("string") random: string = 'foobar';
 
   @type({ map: Player }) players = new MapSchema<Player>();
 }

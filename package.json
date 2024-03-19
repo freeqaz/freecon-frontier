@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "start-colyseus": "tsx src/server.ts",
+    "start-colyseus": "tsx watch src/server.ts",
     "single-dev": "tsimp src/next-server.ts",
     "build": "next build",
     "start": "next start",
@@ -15,6 +15,7 @@
     "@colyseus/playground": "^0.15.3",
     "@colyseus/tools": "^0.15.0",
     "colyseus": "^0.15.0",
+    "colyseus.js": "^0.15.18",
     "express": "^4.18.2",
     "next": "14.1.3",
     "phaser": "^3.80.1",

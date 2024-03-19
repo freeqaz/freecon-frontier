@@ -8,6 +8,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "strictNullChecks": false,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -17,7 +18,7 @@
     "jsx": "preserve",
     "experimentalDecorators": true,
     "incremental": true,
-    "target": "ES2022",
+    "target": "es2020",
     "plugins": [
       {
         "name": "next"

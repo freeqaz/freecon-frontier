@@ -19,6 +19,9 @@ import { MyRoom } from "./colyseus/rooms/MyRoom.js";
 
 // I have no idea why this madness happens at the type level but this tames the beast.
 export default ((colyseusTools as unknown) as (options: ConfigOptions) => ConfigOptions)({
+    options: {
+        devMode: true,
+    },
 
     initializeGameServer: (gameServer) => {
         /**

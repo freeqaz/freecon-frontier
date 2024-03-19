@@ -1,37 +1,14 @@
 import 'phaser';
 import { EventBus } from '../EventBus';
-import ParticleEmitter = Phaser.GameObjects.Particles.ParticleEmitter;
-import {Simulate} from "react-dom/test-utils";
 import { Room, Client } from "colyseus.js";
-import play = Simulate.play;
-import { Player } from '@/colyseus/rooms/schema/MyRoomState';
+import {MyRoomState, Player} from "@/colyseus/rooms/schema/MyRoomState";
 
-
-interface Player { 
-        x: number;
-        y: number;
-        onChange: (cb: () => void) => void;
-    }
 export class Game extends Phaser.Scene {
     private playerShip!: Phaser.Physics.Arcade.Sprite;
     private cursors!: { [key: string]: Phaser.Input.Keyboard.Key };
     private emitter!: Phaser.GameObjects.Particles.ParticleEmitter;
     playerEntities: { [sessionId: string]: Phaser.Types.Physics.Arcade.ImageWithDynamicBody } = {};
-    private room!: Room<{
-        players: { 
-                    [sessionId: string]: Player;
-                 } & {
-                    onAdd: (cb: (player: Player, sessionId: string) => void) => void;
-                    onRemove: (cb: (player: Player, sessionId: string) => void) => void;
-                 }
-    }>;
-
-    inputPayload = {
-        left: false,
-        right: false,
-        up: false,
-        down: false,
-    };
+    private room!: Room<MyRoomState>;
 
     constructor() {
         super('Game');
@@ -44,7 +21,7 @@ export class Game extends Phaser.Scene {
             .setStyle({ color: "#ff0000" })
             .setPadding(4)
 
-        const client = new Client("http://localhost:2567");
+        const client = new Client("ws://localhost:2567");
 
         try {
             this.room = await client.joinOrCreate("my_room", {});
@@ -103,7 +80,12 @@ export class Game extends Phaser.Scene {
         // Colyseus code
         this.room.state.players.onAdd((player, sessionId) => {
             const entity = this.physics.add.sprite(player.x, player.y, 'ship1');
-            console.log(player, sessionId);
+            console.log('played joined', player, sessionId);
+
+            if (sessionId === this.room.sessionId) {
+                // Skip the current player.
+                return;
+            }
             this.playerEntities[sessionId] = entity;
             
             // listening for server updates
@@ -143,7 +125,7 @@ export class Game extends Phaser.Scene {
 
         // this.room.send(0, this.inputPayload);
 
-        this.room.send(0, { x: this.playerShip.x, y: this.playerShip.y });
+        this.room.send('position', { x: this.playerShip.x, y: this.playerShip.y });
 
         for (let sessionId in this.playerEntities) {
             // interpolate all player entities
