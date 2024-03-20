@@ -12,6 +12,7 @@ interface SpritePosition {
 
 function FreeconFrontierGame() {
   const [canMoveSprite, setCanMoveSprite] = useState(true);
+  // @ts-ignore
   const phaserRef = useRef<typeof PhaserGame | null>(null) as MutableRefObject<PhaserGameRefType | null>;
   const [spritePosition, setSpritePosition] = useState<SpritePosition>({ x: 0, y: 0 });
 

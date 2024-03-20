@@ -7,15 +7,13 @@ export class MyRoom extends Room<MyRoomState> {
   fixedTimeStep = 1000 / 60;
 
   onCreate (options: any) {
-    console.log('MyRoom created!', options);
     this.setState(new MyRoomState());
 
     // set map dimensions
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
 
-    this.onMessage('position', (client, input) => {
-      // console.log('received', input, 'from', client.sessionId, 'at location', input.x, input.y);
+    this.onMessage<InputData>('position', (client, input) => {
 
       // handle player input
       const player = this.state.players.get(client.sessionId);
@@ -24,10 +22,13 @@ export class MyRoom extends Room<MyRoomState> {
         return;
       }
 
-      // enqueue input to user input buffer.
-      // player?.inputQueue.push(input);
       player.x = input.x;
       player.y = input.y;
+      player.velocityX = input.velocityX;
+      player.velocityY = input.velocityY;
+      player.rotation = input.rotation;
+      player.rotationVelocity = input.rotationVelocity;
+      player.thrusting = input.thrusting;
     });
 
     this.setSimulationInterval((deltaTime) => {
