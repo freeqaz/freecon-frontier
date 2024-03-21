@@ -28,6 +28,7 @@ export const PhaserGame = forwardRef<PhaserGameRefType, PhaserGameProps>(functio
             if (ref !== null)
             {
                 (ref as MutableRefObject<Phaser.Game | null>).current = {
+                    // @ts-ignore
                     game: game.current,
                     // This seems fine. It works, so maybe the Phaser types are wrong?
                     // @ts-ignore
