@@ -88,11 +88,13 @@ export interface FreeconEntityManager {
   structures: FreeconStructure[];
   projectiles: FreeconProjectile[];
   getAllEntities(): FreeconEntity[];
+  update(time: number, delta: number): void;
 }
 
 export interface FreeconGameRoom {
   players: FreeconPlayer[];
   roomId: string;
+  update: (time: number, delta: number) => void;
 }
 
 export interface FreeconDynamicGameRoom extends FreeconGameRoom {
@@ -118,8 +120,24 @@ export class SpaceRoom implements FreeconGameRoom {
           ...this.entities.projectiles,
         ];
       },
+      update: (time: number, delta: number) => {
+        this.entities.ships.forEach((ship) => {
+
+        });
+
+        this.entities.projectiles.forEach((projectile) => {
+          if (projectile.entityPositionType === 'dynamic') {
+            projectile.x += projectile.velocityX * delta;
+            projectile.y += projectile.velocityY * delta;
+          }
+        });
+      },
     };
     this.players = [];
     this.roomId = roomId;
+  }
+
+  update(time: number, delta: number) {
+    this.entities.update(time, delta);
   }
 }

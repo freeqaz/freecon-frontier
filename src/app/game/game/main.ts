@@ -1,6 +1,6 @@
 import 'phaser';
 import { Boot } from './scenes/Boot';
-import { Game } from './scenes/Game';
+import { Game } from './scenes/GameECS';
 import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
@@ -13,12 +13,13 @@ const config: Phaser.Types.Core.GameConfig = {
     height: 768,
     parent: 'game-container',
     backgroundColor: '#028af8',
-    physics: {
-        default: 'arcade',
-        arcade: {
-            debug: false
-        }
-    },
+    // physics: {
+    //     default: 'matter',
+    //     matter: {
+    //         gravity: { y: 0, x: 0 },
+    //         debug: true
+    //     }
+    // },
     scene: [
         Boot,
         Preloader,
