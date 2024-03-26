@@ -25,6 +25,7 @@ import {
     createPlayerShipNetworkSystem,
     PlayerPositionData
 } from "@/app/game/game/systems/PlayerShipNetworkSystem";
+import {delay} from "@/app/game/game/utils/delay";
 
 export enum Textures {
     Ship1 = 0,
@@ -45,6 +46,7 @@ export class Game extends Phaser.Scene {
     private room!: Room<MyRoomState>;
     private physicsManager: PhysicsManager;
     serverPlayerNetworkData: Map<number, PlayerPositionData> = new Map();
+    currentPlayer?: string;
 
     constructor() {
         super('Game');
@@ -112,22 +114,25 @@ export class Game extends Phaser.Scene {
         await this.connect();
 
         // Colyseus code
-        this.room.state.players.onAdd((player, sessionId) => {
+        this.room.state.players.onAdd(async (player, sessionId) => {
 
             if (sessionId === this.room.sessionId) {
+                this.currentPlayer = sessionId;
+
                 // Skip the current player.
                 return;
             }
+
+            // TODO: Figure out what the race condition is with Colyseus and the rest of the game.
+            // Adding this seems to fix the issue where the player is not added to the game.
+            // No idea why, and that really bothers me.
+            await delay(100);
 
             const ship = addEntity(this.world);
 
             sessionIdToEntityId.set(sessionId, ship);
 
-            console.log('enterEntities matter body before addComponent', ship);
-
             addComponent(this.world, PhysicsBody, ship);
-
-            console.log('enterEntities matter body after addComponent', ship);
 
             PhysicsBody.x[ship] = player.x;
             PhysicsBody.y[ship] = player.y;
@@ -240,7 +245,7 @@ export class Game extends Phaser.Scene {
     }
 
     update(time: number, delta: number) {
-        if (!this.world || !this.pipeline)
+        if (!this.world || !this.pipeline || !this.currentPlayer)
         {
             return;
         }

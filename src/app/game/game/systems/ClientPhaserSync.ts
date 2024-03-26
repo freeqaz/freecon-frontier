@@ -31,8 +31,6 @@ export function createMatterPhaserSpriteSystem(
       const sprite = scene.add.sprite(x, y, textures[textureId]);
       sprite.angle = angle;
 
-      console.log('enterEntities matter sprite', id, sprite);
-
       matterSpritesById.set(id,
         sprite
       );
@@ -44,7 +42,6 @@ export function createMatterPhaserSpriteSystem(
       const sprite = matterSpritesById.get(id)
 
       if (sprite) {
-        console.log('exitEntities matter sprite', id, sprite)
         sprite.destroy();
         matterSpritesById.delete(id)
       }

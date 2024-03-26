@@ -14,7 +14,6 @@ export function createMatterBodySystem(matter: World, matterBodyById: Map<number
     // create matter sprite on enter
     const enterEntities = onQueryEnter(world)
     for (let i = 0; i < enterEntities.length; ++i) {
-      console.log('enterEntities matter body', enterEntities[i]);
       const id = enterEntities[i]
 
       const x = PhysicsBody.x[id]
