@@ -4,7 +4,7 @@ import {
     addEntity,
     addComponent,
     IWorld,
-    pipe,
+    pipe, removeEntity,
 } from 'bitecs'
 import { EventBus } from '../EventBus';
 import { Room, Client } from "colyseus.js";
@@ -14,12 +14,17 @@ import {PhysicsBody} from "@/app/game/game/components/Position";
 import {MatterSprite} from "@/app/game/game/components/MatterSprite";
 import Phaser from "phaser";
 import {createMatterBodySystem, createMatterPhysicsBodySyncSystem} from "@/app/game/game/systems/Matter";
-import {Body} from "matter-js";
+import {Body, Composite} from "matter-js";
 import {createMatterPhaserSpriteSystem, createPhaserBodySyncSystem} from "@/app/game/game/systems/ClientPhaserSync";
 import {createPlayerSystem} from "@/app/game/game/systems/ClientPlayerSystem";
 import {createShipMovementSystem} from "@/app/game/game/systems/ShipMovementSystem";
-import {PlayerShip} from "@/app/game/game/components/Ship";
+import {NetworkShip, PlayerShip} from "@/app/game/game/components/Ship";
 import {Input} from "@/app/game/game/components/Input";
+import {
+    createNetworkShipNetworkSystem,
+    createPlayerShipNetworkSystem,
+    PlayerPositionData
+} from "@/app/game/game/systems/PlayerShipNetworkSystem";
 
 export enum Textures {
     Ship1 = 0,
@@ -35,15 +40,11 @@ export class Game extends Phaser.Scene {
     private pipeline?: (world: IWorld) => void
     private afterPhysicsPipeline?: (world: IWorld) => void
 
-    private playerShip!: Phaser.Physics.Arcade.Sprite;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private emitter!: Phaser.GameObjects.Particles.ParticleEmitter;
-    playerEntities: { [sessionId: string]: {
-        body: Phaser.Types.Physics.Arcade.ImageWithDynamicBody,
-        emitter: Phaser.GameObjects.Particles.ParticleEmitter
-    } } = {};
     private room!: Room<MyRoomState>;
     private physicsManager: PhysicsManager;
+    serverPlayerNetworkData: Map<number, PlayerPositionData> = new Map();
 
     constructor() {
         super('Game');
@@ -75,15 +76,6 @@ export class Game extends Phaser.Scene {
     init() {
         this.cursors = this.input.keyboard.createCursorKeys();
 
-        // const onAfterUpdate = () => {
-        //     if (!this.afterPhysicsPipeline || !this.world)
-        //     {
-        //         return;
-        //     }
-        //
-        //     this.afterPhysicsPipeline(this.world);
-        // }
-
         // this.matter.world.on(Phaser.Physics.Matter.Events.AFTER_UPDATE, onAfterUpdate);
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -102,9 +94,9 @@ export class Game extends Phaser.Scene {
 
         addComponent(this.world, PhysicsBody, ship);
 
-        PhysicsBody.x[ship] = 400;
-        PhysicsBody.y[ship] = 300;
-        PhysicsBody.angle[ship] = 76;
+        PhysicsBody.x[ship] = 400 + Math.random() * 100;
+        PhysicsBody.y[ship] = 300 + Math.random() * 100;
+        PhysicsBody.angle[ship] = Math.random() * 180;
         PhysicsBody.isStatic[ship] = 0;
 
         addComponent(this.world, MatterSprite, ship);
@@ -115,31 +107,92 @@ export class Game extends Phaser.Scene {
 
         const matterBodyById = new Map<number, Body>();
         const matterSpritesById = new Map<number, Phaser.GameObjects.Sprite>();
+        const sessionIdToEntityId = new Map<string, number>();
+
+        await this.connect();
+
+        // Colyseus code
+        this.room.state.players.onAdd((player, sessionId) => {
+
+            if (sessionId === this.room.sessionId) {
+                // Skip the current player.
+                return;
+            }
+
+            const ship = addEntity(this.world);
+
+            sessionIdToEntityId.set(sessionId, ship);
+
+            console.log('enterEntities matter body before addComponent', ship);
+
+            addComponent(this.world, PhysicsBody, ship);
+
+            console.log('enterEntities matter body after addComponent', ship);
+
+            PhysicsBody.x[ship] = player.x;
+            PhysicsBody.y[ship] = player.y;
+            PhysicsBody.angle[ship] = player.rotation;
+            PhysicsBody.velocityX[ship] = player.velocityX;
+            PhysicsBody.velocityY[ship] = player.velocityY;
+            PhysicsBody.angularVelocity[ship] = player.rotationVelocity;
+            PhysicsBody.isStatic[ship] = 0;
+
+            addComponent(this.world, MatterSprite, ship);
+
+            MatterSprite.texture[ship] = 0;
+
+            addComponent(this.world, NetworkShip, ship);
+
+            console.log('played joined', player, sessionId);
+
+            // listening for server updates
+            player.onChange(() => {
+                // do not update local position immediately
+                // we're going to LERP them during the update loop.
+                this.serverPlayerNetworkData.set(ship, {
+                    x: player.x,
+                    y: player.y,
+                    rotation: player.rotation,
+                    rotationVelocity: player.rotationVelocity,
+                    velocityX: player.velocityX,
+                    velocityY: player.velocityY,
+                    thrusting: player.thrusting,
+                    dirty: true,
+                });
+            });
+        });
+
+        // remove local reference when entity is removed from the server
+        this.room.state.players.onRemove((player, sessionId) => {
+            const entityId = sessionIdToEntityId.get(sessionId);
+            if (entityId === undefined) {
+                return;
+            }
+
+            // TODO: Add back emitter logic
+            // if (emitter) {
+            //     emitter.destroy();
+            // }
+
+            sessionIdToEntityId.delete(sessionId);
+            removeEntity(this.world, entityId);
+        });
 
         // create MatterSpriteSystem
         this.pipeline = pipe(
-          createMatterBodySystem(this.physicsManager.world, matterBodyById),
-          createMatterPhaserSpriteSystem(this, matterSpritesById, TextureKeys),
           createPlayerSystem(this.cursors),
           createShipMovementSystem(matterBodyById),
+          createPlayerShipNetworkSystem(this.room, matterBodyById)
         )
 
         this.afterPhysicsPipeline = pipe(
+          createNetworkShipNetworkSystem(matterBodyById, this.serverPlayerNetworkData),
+          createMatterBodySystem(this.physicsManager.world, matterBodyById),
           createMatterPhysicsBodySyncSystem(matterBodyById),
+          createMatterPhaserSpriteSystem(this, matterSpritesById, TextureKeys),
           createPhaserBodySyncSystem(matterSpritesById)
         )
 
-        // await this.connect();
-        //
-        // // Player's ship
-        // this.playerShip = this.physics.add.sprite(400, 300, 'ship1');
-        // this.playerShip.setDamping(true);
-        // this.playerShip.setDrag(0.99);
-        // this.playerShip.setMaxVelocity(220)
-        //   .setBounce(0.9, 0.9)
-        //   .setCollideWorldBounds(true)
-        //   .setDepth(10);
-        //
         // const createEmitter = (body?: Phaser.Physics.Arcade.Sprite | Phaser.Types.Physics.Arcade.ImageWithDynamicBody) => {
         //     return this.add.particles(0, 0, 'flares', {
         //         frame: 'white',
@@ -156,69 +209,8 @@ export class Game extends Phaser.Scene {
         //
         // // Particle effects for the ship
         // this.emitter = createEmitter(this.playerShip);
-        //
-        // // Keyboard controls
-        // // @ts-ignore
-        // this.cursors = this.input.keyboard?.addKeys({
-        //     up: Phaser.Input.Keyboard.KeyCodes.UP,
-        //     left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-        //     down: Phaser.Input.Keyboard.KeyCodes.DOWN,
-        //     right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-        //     shoot: Phaser.Input.Keyboard.KeyCodes.SPACE
-        // });
-        //
-        // // Colyseus code
-        // this.room.state.players.onAdd((player, sessionId) => {
-        //
-        //     if (sessionId === this.room.sessionId) {
-        //         // Skip the current player.
-        //         return;
-        //     }
-        //
-        //     const entity = this.physics.add.sprite(player.x, player.y, 'ship1');
-        //     entity.setDamping(true);
-        //     entity.setDrag(0.99);
-        //
-        //     console.log('played joined', player, sessionId);
-        //     this.playerEntities[sessionId] = {
-        //         body: entity,
-        //         emitter: createEmitter(entity)
-        //     };
-        //     entity.x = player.x;
-        //     entity.y = player.y;
-        //     entity.setRotation(player.rotation);
-        //     entity.setAngularVelocity(player.rotationVelocity);
-        //     entity.setVelocity(player.velocityX, player.velocityY);
-        //
-        //     // listening for server updates
-        //     player.onChange(() => {
-        //         //
-        //         // do not update local position immediately
-        //         // we're going to LERP them during the render loop.
-        //         //
-        //         entity.setData('serverX', player.x);
-        //         entity.setData('serverY', player.y);
-        //         entity.setData('serverRotation', player.rotation);
-        //         entity.setData('serverRotationVelocity', player.rotationVelocity);
-        //         entity.setData('serverVelocityX', player.velocityX);
-        //         entity.setData('serverVelocityY', player.velocityY);
-        //         entity.setData('serverThrusting', player.thrusting);
-        //     });
-        // });
-        //
-        // // remove local reference when entity is removed from the server
-        // this.room.state.players.onRemove((player, sessionId) => {
-        //     const {body, emitter} = this.playerEntities[sessionId];
-        //     if (body) {
-        //         body.destroy();
-        //     }
-        //     if (emitter) {
-        //         emitter.destroy();
-        //     }
-        //     delete this.playerEntities[sessionId];
-        // });
-        //
-        // EventBus.emit('current-scene-ready', this);
+
+        EventBus.emit('current-scene-ready', this);
     }
 
     emitParticleFromShip(ship: Phaser.Physics.Arcade.Sprite | Phaser.Types.Physics.Arcade.ImageWithDynamicBody, emitter: Phaser.GameObjects.Particles.ParticleEmitter) {
@@ -253,76 +245,22 @@ export class Game extends Phaser.Scene {
             return;
         }
 
+        // Colyseus code
+        // skip loop if not connected yet.
+        if (!this.room) { return; }
+
         this.physicsManager.update(delta);
 
         this.afterPhysicsPipeline(this.world);
 
         this.pipeline(this.world);
 
-        // console.log('time and delta', time, delta);
-
-
-        // Colyseus code
-        // skip loop if not connected yet.
-        // if (!this.room) { return; }
-
-        // this.room.send('position', {
-        //     x: this.playerShip.x,
-        //     y: this.playerShip.y,
-        //     rotation: this.playerShip.rotation,
-        //     // @ts-ignore
-        //     rotationVelocity: this.playerShip.body.angularVelocity,
-        //     velocityX: this.playerShip.body.velocity.x,
-        //     velocityY: this.playerShip.body.velocity.y,
-        //     thrusting: this.cursors.up.isDown,
-        // });
-        //
-        // for (let sessionId in this.playerEntities) {
-        //     // interpolate all player entities
-        //     const {body, emitter} = this.playerEntities[sessionId];
-        //     const { serverX, serverY } = body.data.values;
-        //
-        //     body.x = Phaser.Math.Linear(body.x, serverX, 0.2);
-        //     body.y = Phaser.Math.Linear(body.y, serverY, 0.2);
-        //
-        //     // TODO: interpolate rotation and velocity as well
-        //     body.setRotation(body.getData('serverRotation'));
-        //     body.setAngularVelocity(body.getData('serverRotationVelocity'));
-        //     body.setVelocity(body.getData('serverVelocityX'), body.getData('serverVelocityY'));
-        //
-        //     if (body.getData('serverThrusting')) {
-        //         this.emitParticleFromShip(body, emitter);
-        //     }
-        // }
-        //
-        // // Movement
-        // if (this.cursors.left.isDown) {
-        //     this.playerShip.setAngularVelocity(-150);
-        // } else if (this.cursors.right.isDown) {
-        //     this.playerShip.setAngularVelocity(150);
-        // } else {
-        //     this.playerShip.setAngularVelocity(0);
-        // }
-        //
-        // if (this.cursors.up.isDown) {
-        //     this.emitParticleFromShip(this.playerShip, this.emitter);
-        // } else {
-        //     this.playerShip.setAcceleration(0);
-        // }
-        //
         // // Phaser.Math.RotateAroundDistance(this.emitter, this.playerShip.x / 18, this.playerShip.y / 18, this.playerShip.rotation, 10);
         // // Update the emitter position to behind the ship based on its angle
         // // this.emitter.setPosition(this.playerShip.x / 20, this.playerShip.y / 20);
         // // @ts-ignore
         // // this.emitter.setAngle({ min: this.playerShip.angle, max: this.playerShip.angle});
         // // this.emitter.setAngle(this.playerShip.angle);
-        //
-        // // Shooting (basic implementation)
-        // if (Phaser.Input.Keyboard.JustDown(this.cursors.shoot)) {
-        //     // Here, you would create a bullet and shoot it from the ship's position.
-        //     // This code is omitted for brevity. You would need to add bullet physics and handling.
-        //     console.log('Shoot!');
-        // }
     }
 
     changeScene() {

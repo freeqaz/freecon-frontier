@@ -21,17 +21,17 @@ export function createMatterPhaserSpriteSystem(
     // create matter sprite on enter
     const enterEntities = onQueryEnter(world)
     for (let i = 0; i < enterEntities.length; ++i) {
-      const id = enterEntities[i]
+      const id = enterEntities[i];
 
-      const x = PhysicsBody.x[id]
-      const y = PhysicsBody.y[id]
-      const angle = PhysicsBody.angle[id]
-      const textureId = MatterSprite.texture[id]
+      const x = PhysicsBody.x[id];
+      const y = PhysicsBody.y[id];
+      const angle = PhysicsBody.angle[id];
+      const textureId = MatterSprite.texture[id];
 
-      // const sprite = new Sprite(matterPhaser.scene, x, y, textures[textureId]);
-      // sprite.angle = angle;
       const sprite = scene.add.sprite(x, y, textures[textureId]);
       sprite.angle = angle;
+
+      console.log('enterEntities matter sprite', id, sprite);
 
       matterSpritesById.set(id,
         sprite
@@ -44,6 +44,7 @@ export function createMatterPhaserSpriteSystem(
       const sprite = matterSpritesById.get(id)
 
       if (sprite) {
+        console.log('exitEntities matter sprite', id, sprite)
         sprite.destroy();
         matterSpritesById.delete(id)
       }
@@ -66,6 +67,7 @@ export function createPhaserBodySyncSystem(matterSpritesById: Map<number, Phaser
 
       if (!sprite)
       {
+        console.log('No sprite found for id', id);
         continue
       }
 
