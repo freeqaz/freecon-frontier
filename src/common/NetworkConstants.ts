@@ -1,0 +1,2 @@
+
+export const POSITION_UPDATES_PER_SECOND = 12;

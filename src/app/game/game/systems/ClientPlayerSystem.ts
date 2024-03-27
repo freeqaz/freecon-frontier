@@ -1,11 +1,7 @@
 import Phaser from 'phaser'
-import {
-	defineSystem,
-	defineQuery
-} from 'bitecs';
+import {defineQuery, defineSystem} from 'bitecs';
 
-import { Player } from '../components/Player';
-import { Input } from '../components/Input';
+import {Input} from '../components/Input';
 import {PlayerShip} from "@/app/game/game/components/Ship";
 
 export function createPlayerSystem(cursors: Phaser.Types.Input.Keyboard.CursorKeys) {
@@ -25,3 +21,4 @@ export function createPlayerSystem(cursors: Phaser.Types.Input.Keyboard.CursorKe
 		return world
 	})
 }
+

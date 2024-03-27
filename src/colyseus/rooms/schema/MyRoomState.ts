@@ -1,23 +1,15 @@
 import { Schema, Context, type, MapSchema } from "@colyseus/schema";
+import {ShipStateData, ShipThrustDirection} from "@/common/NetworkTypeSchemas";
 
-export interface InputData {
-  x: number;
-  y: number;
-  rotation: number;
-  rotationVelocity: number;
-  velocityX: number;
-  velocityY: number;
-  thrusting: boolean;
-}
 
-export class Player extends Schema {
+export class Player extends Schema implements ShipStateData {
   @type("number") x!: number;
   @type("number") y!: number;
   @type("number") rotation!: number;
   @type("number") rotationVelocity!: number;
   @type("number") velocityX!: number;
   @type("number") velocityY!: number;
-  @type("boolean") thrusting: boolean = false;
+  @type("number") thrustDirection: ShipThrustDirection = 0;
 }
 
 export class MyRoomState extends Schema {

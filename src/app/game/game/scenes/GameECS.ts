@@ -1,39 +1,35 @@
 import 'phaser';
-import {
-    createWorld,
-    addEntity,
-    addComponent,
-    IWorld,
-    pipe, removeEntity,
-} from 'bitecs'
-import { EventBus } from '../EventBus';
-import { Room, Client } from "colyseus.js";
-import {MyRoomState, Player} from "@/colyseus/rooms/schema/MyRoomState";
+import {addComponent, addEntity, createWorld, IWorld, pipe, removeEntity,} from 'bitecs'
+import {EventBus} from '../EventBus';
+import {Client, Room} from "colyseus.js";
+import {MyRoomState} from "@/colyseus/rooms/schema/MyRoomState";
 import {PhysicsManager} from "@/app/game/game/managers/physics";
 import {PhysicsBody} from "@/app/game/game/components/Position";
 import {MatterSprite} from "@/app/game/game/components/MatterSprite";
 import Phaser from "phaser";
 import {createMatterBodySystem, createMatterPhysicsBodySyncSystem} from "@/app/game/game/systems/Matter";
-import {Body, Composite} from "matter-js";
-import {createMatterPhaserSpriteSystem, createPhaserBodySyncSystem} from "@/app/game/game/systems/ClientPhaserSync";
+import {Body} from "matter-js";
+import {
+    createMatterPhaserSpriteSystem,
+    createPhaserBodySyncSystem
+} from "@/app/game/game/systems/ClientPhaserSync";
 import {createPlayerSystem} from "@/app/game/game/systems/ClientPlayerSystem";
 import {createShipMovementSystem} from "@/app/game/game/systems/ShipMovementSystem";
-import {NetworkShip, PlayerShip} from "@/app/game/game/components/Ship";
+import {ExhaustThrustEmitter, NetworkShip, PlayerShip} from "@/app/game/game/components/Ship";
 import {Input} from "@/app/game/game/components/Input";
 import {
     createNetworkShipNetworkSystem,
     createPlayerShipNetworkSystem,
     PlayerPositionData
-} from "@/app/game/game/systems/PlayerShipNetworkSystem";
+} from "@/app/game/game/systems/ShipNetworkSystem";
 import {delay} from "@/app/game/game/utils/delay";
-
-export enum Textures {
-    Ship1 = 0,
-}
-
-export const TextureKeys = [
-    'ship1',
-]
+import {TextureKeys} from "@/app/game/game/TextureConstants";
+import {
+    createDefaultThrustTextureSystem,
+    createPhaserThrustSystem,
+    createPlayerShipThrustSystem, createThrustEmissionSystem
+} from "@/app/game/game/systems/ThrustSystem";
+import {createNetworkInterpolationDebugSystem} from "@/app/game/game/systems/NetworkDebugSystem";
 
 export class Game extends Phaser.Scene {
 
@@ -102,6 +98,7 @@ export class Game extends Phaser.Scene {
         PhysicsBody.isStatic[ship] = 0;
 
         addComponent(this.world, MatterSprite, ship);
+        addComponent(this.world, ExhaustThrustEmitter, ship);
         addComponent(this.world, PlayerShip, ship);
         addComponent(this.world, Input, ship);
 
@@ -110,6 +107,11 @@ export class Game extends Phaser.Scene {
         const matterBodyById = new Map<number, Body>();
         const matterSpritesById = new Map<number, Phaser.GameObjects.Sprite>();
         const sessionIdToEntityId = new Map<string, number>();
+        const shipEmitterById = new Map<number, Phaser.GameObjects.Particles.ParticleEmitter>();
+
+
+        // Particle effects for the ship
+        // this.emitter = createEmitter(this.playerShip);
 
         await this.connect();
 
@@ -146,6 +148,7 @@ export class Game extends Phaser.Scene {
 
             MatterSprite.texture[ship] = 0;
 
+            addComponent(this.world, ExhaustThrustEmitter, ship);
             addComponent(this.world, NetworkShip, ship);
 
             console.log('played joined', player, sessionId);
@@ -161,7 +164,7 @@ export class Game extends Phaser.Scene {
                     rotationVelocity: player.rotationVelocity,
                     velocityX: player.velocityX,
                     velocityY: player.velocityY,
-                    thrusting: player.thrusting,
+                    thrustDirection: player.thrustDirection,
                     dirty: true,
                 });
             });
@@ -174,20 +177,19 @@ export class Game extends Phaser.Scene {
                 return;
             }
 
-            // TODO: Add back emitter logic
-            // if (emitter) {
-            //     emitter.destroy();
-            // }
-
             sessionIdToEntityId.delete(sessionId);
             removeEntity(this.world, entityId);
         });
 
-        // create MatterSpriteSystem
         this.pipeline = pipe(
+          createDefaultThrustTextureSystem(),
+          createPhaserThrustSystem(this, matterSpritesById, shipEmitterById, TextureKeys),
           createPlayerSystem(this.cursors),
+          createPlayerShipThrustSystem(),
           createShipMovementSystem(matterBodyById),
-          createPlayerShipNetworkSystem(this.room, matterBodyById)
+          createPlayerShipNetworkSystem(this.room, matterBodyById),
+          createThrustEmissionSystem(matterSpritesById, shipEmitterById),
+          createNetworkInterpolationDebugSystem(this),
         )
 
         this.afterPhysicsPipeline = pipe(
@@ -195,22 +197,9 @@ export class Game extends Phaser.Scene {
           createMatterBodySystem(this.physicsManager.world, matterBodyById),
           createMatterPhysicsBodySyncSystem(matterBodyById),
           createMatterPhaserSpriteSystem(this, matterSpritesById, TextureKeys),
-          createPhaserBodySyncSystem(matterSpritesById)
+          createPhaserBodySyncSystem(matterSpritesById),
         )
 
-        // const createEmitter = (body?: Phaser.Physics.Arcade.Sprite | Phaser.Types.Physics.Arcade.ImageWithDynamicBody) => {
-        //     return this.add.particles(0, 0, 'flares', {
-        //         frame: 'white',
-        //         color: [ 0xfacc22, 0xf89800, 0xf83600, 0x9f0404 ],
-        //         colorEase: 'quad.out',
-        //         speed: 200,
-        //         scale: { start: 0.09, end: 0 },
-        //         blendMode: 'ADD',
-        //         lifespan: 300,
-        //         emitting: false,
-        //         follow: body
-        //     }).setDepth(-1);
-        // }
         //
         // // Particle effects for the ship
         // this.emitter = createEmitter(this.playerShip);
@@ -218,31 +207,7 @@ export class Game extends Phaser.Scene {
         EventBus.emit('current-scene-ready', this);
     }
 
-    emitParticleFromShip(ship: Phaser.Physics.Arcade.Sprite | Phaser.Types.Physics.Arcade.ImageWithDynamicBody, emitter: Phaser.GameObjects.Particles.ParticleEmitter) {
-        // @ts-ignore
-        this.physics.velocityFromRotation(ship.rotation, 200, ship.body?.acceleration);
 
-        const particle = emitter.emitParticleAt(ship.x, ship.y, 1);
-        if (particle) {
-            // Minimum speed of the particles. Makes it look better when thrusting against a wall, for example.
-            const minParticleSpeed = 300;
-            // Factor to control the speed based on the ship's speed
-            const speedFactor = 1.2;
-            const shipAngleInRadians = ship.rotation;
-
-            // If the ship has a velocity, adjust the particle velocity based on it
-            if (ship.body) {
-                const shipSpeed = Math.sqrt(Math.pow(ship.body.velocity.x, 2) + Math.pow(ship.body.velocity.y, 2));
-
-                // Pick either speed for the particle based on either the ship's speed or the minimum speed
-                const adjustedSpeed = Math.max(minParticleSpeed, shipSpeed * speedFactor);
-
-                // Recalculate base velocities with adjusted speed
-                particle.velocityX = Math.cos(shipAngleInRadians) * adjustedSpeed * -1;
-                particle.velocityY = Math.sin(shipAngleInRadians) * adjustedSpeed * -1;
-            }
-        }
-    }
 
     update(time: number, delta: number) {
         if (!this.world || !this.pipeline || !this.currentPlayer)

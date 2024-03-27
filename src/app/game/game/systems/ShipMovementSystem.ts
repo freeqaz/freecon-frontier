@@ -3,7 +3,10 @@ import {PlayerShip} from "@/app/game/game/components/Ship";
 import {defineQuery, defineSystem} from "bitecs";
 import {Input} from "@/app/game/game/components/Input";
 import {Body} from "matter-js";
-export function createShipMovementSystem(matterBodyById: Map<number, Body>) {
+
+export function createShipMovementSystem(
+  matterBodyById: Map<number, Body>
+) {
   const query = defineQuery([PhysicsBody, PlayerShip, Input]);
   return defineSystem(world => {
     const entities = query(world);
@@ -28,6 +31,19 @@ export function createShipMovementSystem(matterBodyById: Map<number, Body>) {
         const forceY = Math.sin(radians) * force;
         body.force = {x: forceX, y: forceY};
       }
+
+      // Limit maximum velocity
+      const MAX_LINEAR_VELOCITY = 4;
+      const velocity = body.velocity;
+      const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+      if (speed > MAX_LINEAR_VELOCITY) {
+        const scale = MAX_LINEAR_VELOCITY / speed;
+        Body.setVelocity(body, {
+          x: velocity.x * scale,
+          y: velocity.y * scale
+        })
+      }
+
 
       const isLeft = !!Input.left[id];
       const isRight = !!Input.right[id];
@@ -61,6 +77,7 @@ export function createShipMovementSystem(matterBodyById: Map<number, Body>) {
           Body.setAngularVelocity(body, 0);
         }
       }
+
       // Limit angular velocity
       const VELOCITY = 4.5;
       if (body.angularVelocity > VELOCITY) {

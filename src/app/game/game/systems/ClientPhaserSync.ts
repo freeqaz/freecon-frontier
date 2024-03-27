@@ -1,9 +1,7 @@
-import {Bodies, Body, Composite, World} from "matter-js";
 import {defineQuery, defineSystem, enterQuery, exitQuery} from "bitecs";
 import {PhysicsBody} from "@/app/game/game/components/Position";
 import {MatterSprite} from "@/app/game/game/components/MatterSprite";
 import Phaser from "phaser";
-import Sprite = Phaser.GameObjects.Sprite;
 
 
 export function createMatterPhaserSpriteSystem(
@@ -50,6 +48,8 @@ export function createMatterPhaserSpriteSystem(
     return world
   })
 }
+
+
 export function createPhaserBodySyncSystem(matterSpritesById: Map<number, Phaser.GameObjects.Sprite>) {
   // create query
   const query = defineQuery([PhysicsBody, MatterSprite])
@@ -65,7 +65,7 @@ export function createPhaserBodySyncSystem(matterSpritesById: Map<number, Phaser
       if (!sprite)
       {
         console.log('No sprite found for id', id);
-        continue
+        continue;
       }
 
       sprite.x = PhysicsBody.x[id]

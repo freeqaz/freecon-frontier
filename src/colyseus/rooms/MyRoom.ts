@@ -1,7 +1,8 @@
 import * as Colyseus from "colyseus";
 console.log(Colyseus);
 import { Room, Client } from "colyseus";
-import { InputData, MyRoomState, Player } from "./schema/MyRoomState";
+import { MyRoomState, Player } from "./schema/MyRoomState";
+import {ShipStateData} from "@/common/NetworkTypeSchemas";
 
 export class MyRoom extends Room<MyRoomState> {
   fixedTimeStep = 1000 / 60;
@@ -13,7 +14,7 @@ export class MyRoom extends Room<MyRoomState> {
     this.state.mapWidth = 800;
     this.state.mapHeight = 600;
 
-    this.onMessage<InputData>('position', (client, input) => {
+    this.onMessage<ShipStateData>('position', (client, input) => {
 
       // handle player input
       const player = this.state.players.get(client.sessionId);
@@ -28,7 +29,7 @@ export class MyRoom extends Room<MyRoomState> {
       player.velocityY = input.velocityY;
       player.rotation = input.rotation;
       player.rotationVelocity = input.rotationVelocity;
-      player.thrusting = input.thrusting;
+      player.thrustDirection = input.thrustDirection;
     });
 
     this.setSimulationInterval((deltaTime) => {

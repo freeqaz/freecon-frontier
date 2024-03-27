@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
-import {TextureKeys, Textures} from "@/app/game/game/scenes/GameECS";
+
+import {TextureKeys, Textures} from "@/app/game/game/TextureConstants";
 
 export class Preloader extends Scene
 {
